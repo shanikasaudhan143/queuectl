@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Optional: if you have multiple env files (like .env.local, .env.production)
+.env.*
+
+# Optional: logs and temporary files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Optional: build or dist directories
+dist/
+build/

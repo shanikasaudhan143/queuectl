@@ -11,7 +11,6 @@ export function handler(argv) {
     console.log('--- Job Status ---');
     console.table(counts);
 
-    // TODO: You could also add DLQ count
     const dlqJobs = queries.listDlqJobs();
     console.log(`\nDead Letter Queue (DLQ): ${dlqJobs.length} job(s)`);
 

@@ -1,0 +1,18 @@
+1->
+queuectl enqueue '{"id":"job-low","command":"echo I am low priority", "priority": 1}' // t1
+
+2->
+queuectl enqueue '{"id":"job-high","command":"echo I am HIGH priority", "priority": 10}' // t1
+
+3-> 
+queuectl status // t1
+
+4->
+queuectl worker start --count 1 // t2
+
+time out->
+queuectl config set max_retries 2
+queuectl enqueue '{"id":"job-timeout","command":"ping -n 10 127.0.0.1 > nul", "timeout_seconds": 2}'
+
+queuectl dlq list
+queuectl dlq retry job-timeout

@@ -11,18 +11,16 @@ export function handler(argv) {
     }
 
     const config = configManager.getConfig();
-    
-    // Format the 'run_at' string cleanly
+     
     let run_at_timestamp;
     if (jobData.run_at) {
-      // Convert ISO string (e.g., 2025-11-09T22:57:00Z) to SQLite format (YYYY-MM-DD HH:MM:SS)
       run_at_timestamp = new Date(jobData.run_at).toISOString().slice(0, 19).replace('T', ' ');
     }
     
     const job = {
       ...jobData,
       max_retries: jobData.max_retries || config.max_retries,
-      run_at: run_at_timestamp, // Use the new formatted string (or undefined)
+      run_at: run_at_timestamp,  
       priority: jobData.priority || 0,
       timeout_seconds: jobData.timeout_seconds,
     };

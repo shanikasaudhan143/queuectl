@@ -5,7 +5,7 @@ const configPath = path.join(process.cwd(), 'queue-config.json');
 
 const DEFAULTS = {
   max_retries: 3,
-  backoff_base: 2, // 2 seconds
+  backoff_base: 2,  
 };
 
 export function getConfig() {
@@ -26,7 +26,6 @@ export function setConfig(key, value) {
     const currentConfig = getConfig();
     currentConfig[key] = value;
     
-    // Convert value if it's a number
     if (!isNaN(Number(value))) {
         currentConfig[key] = Number(value);
     }

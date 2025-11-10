@@ -1,6 +1,5 @@
 import db from './index.js';
-
-// A cleaner, safer way to get a SQLite-friendly UTC timestamp
+ 
 function getSQLiteTimestamp() {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
@@ -29,7 +28,7 @@ export function addJob(job) {
       max_retries: job.max_retries,
       priority: job.priority,
       timeout_seconds: job.timeout_seconds,
-      run_at: job.run_at, // run_at is now formatted in enqueue.js
+      run_at: job.run_at,  
       now: now,
     });
     return true;
@@ -40,7 +39,6 @@ export function addJob(job) {
 }
 
 export const getNextPendingJob = db.transaction(() => {
-  // Use SQLite's 'now' function for the check
   const now = getSQLiteTimestamp();
   const job = db
     .prepare(
@@ -49,7 +47,7 @@ export const getNextPendingJob = db.transaction(() => {
        ORDER BY priority DESC, created_at ASC
        LIMIT 1`
     )
-    .get(); // No params needed
+    .get();  
 
   if (job) {
     db.prepare(
@@ -77,7 +75,6 @@ export function updateJobSuccess(id, durationSeconds) {
 }
 
 export function updateJobFailure(id, attempts, nextRunAt, error) {
-  // 'nextRunAt' is already a formatted string from the worker, so this is fine
   db.prepare(
     `UPDATE jobs
      SET state = 'pending', attempts = ?, run_at = ?, updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
@@ -111,8 +108,7 @@ export const retryDlqJob = db.transaction((jobId) => {
   console.log(`Job ${jobId} moved from DLQ back to pending queue.`);
   return true;
 });
-
-// --- No changes to the functions below ---
+ 
 export function getJobCounts() {
   return db.prepare(`SELECT state, COUNT(*) as count FROM jobs GROUP BY state`).all();
 }

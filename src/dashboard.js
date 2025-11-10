@@ -1,36 +1,29 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as queries from './db/queries.js'; // Import all your queries
+import * as queries from './db/queries.js';  
 
-// ES6 replacement for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
 const app = express();
-
-// Configure EJS as the view engine
+ 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
-// Simple auto-refresh header
+ 
 app.use((req, res, next) => {
-  res.setHeader('Refresh', '5'); // Refresh every 5 seconds
+  res.setHeader('Refresh', '5');  
   next();
 });
-
-// Main dashboard route
+ 
 app.get('/', (req, res) => {
   try {
-    // Fetch all data from your DB in one go
     const statusCounts = queries.getJobCounts();
     const pendingJobs = queries.listJobsByState('pending');
     const completedJobs = queries.listJobsByState('completed');
     const dlqJobs = queries.listDlqJobs();
     const stats = queries.getJobStats();
-    
-    // Format status counts into an easy-to-use object
     const status = { pending: 0, completed: 0, processing: 0, failed: 0 };
     statusCounts.forEach(s => { status[s.state] = s.count });
 

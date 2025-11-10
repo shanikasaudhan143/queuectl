@@ -6,6 +6,9 @@ This system manages background jobs with multiple worker processes, handles retr
 
 ---
 
+## demo video
+- https://drive.google.com/file/d/1Kb2Xj5WK6recIkb41kJpjCdU6QaG4lRf/view?usp=sharing
+
 ## 🌟 Features
 
 | Feature | Status | Description |
@@ -230,7 +233,7 @@ The system uses SQLite for persistence. This choice was made over a simple JSON 
 
 - Because this is an atomic transaction, only one worker can ever "win" and get the job, making the system safe for parallel processing.
 
-[Link to CLI Demo Video]  
+   
 
  
 

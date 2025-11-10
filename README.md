@@ -131,6 +131,7 @@ queuectl status
 ```
 Output:
 
+```bash
 --- Job Status ---
 ┌─────────┬─────────────┬───────┐
 │ (index) │ state       │ count │
@@ -138,7 +139,7 @@ Output:
 │ 0       │ 'completed' │ 1     │
 │ 1       │ 'pending'   │ 2     │
 └─────────┴─────────────┴───────┘
-
+```
 Dead Letter Queue (DLQ): 0 job(s)
 Check Execution Metrics
 
@@ -149,6 +150,7 @@ queuectl stats
 ```
 Output:
 
+```bash
 --- Job Execution Stats ---
 ┌──────────────────────┬─────────┐
 │ (index)              │ Values  │
@@ -158,6 +160,7 @@ Output:
 │ 'Min Duration'       │ '0.048s' │
 │ 'Max Duration'       │ '0.048s' │
 └──────────────────────┴─────────┘
+```
 List Specific Jobs
 
 ```bash
@@ -212,7 +215,7 @@ Now open http://localhost:3000 in your browser to see a live-refreshing view of 
 
 - Job Lifecycle pending → processing → completed pending → processing → failed → (retry) → pending → ... → dead
 
-- Data Persistence & Concurrency
+ ## Data Persistence & Concurrency
 The system uses SQLite for persistence. This choice was made over a simple JSON file to solve the concurrency and race condition problem.
 
 - When multiple workers try to get a job at the same time, we must prevent them from grabbing the same job. This is solved in src/db/queries.js:
@@ -227,69 +230,9 @@ The system uses SQLite for persistence. This choice was made over a simple JSON 
 
 - Because this is an atomic transaction, only one worker can ever "win" and get the job, making the system safe for parallel processing.
 
-Worker Execution
-The workerProcess.js file uses child_process.spawn() with shell: true and detached: true.
+[Link to CLI Demo Video]  
 
-spawn was chosen over exec because it is more stable for long-running processes, handles stdout/stderr streaming, and was more reliable on Windows.
-
-detached: true was essential for allowing the worker stop command to send a SIGTERM signal without killing the parent.
-
-🤔 Assumptions & Trade-offs
-SQLite vs. JSON: We chose SQLite for its robust transaction support, which solves concurrency. The trade-off is a slightly heavier dependency than a plain JSON file.
-
-Worker Polling: Idle workers poll the database every ~2 seconds. This is a simple and effective implementation. In a hyperscale system, this might be replaced with a pub/sub system (like Redis) to "push" jobs to workers, but that is outside the scope of this assignment.
-
-worker stop: The worker stop implementation relies on a local PID file (workers.registry.json). This is perfect for a single-machine CLI, but would not work in a distributed/containerized environment (which would use a different shutdown mechanism like SIGTERM from an orchestrator).
-
-🧪 Testing Instructions
-A full test plan is included below to validate all functionality.
-
-[Link to CLI Demo Video] (You can upload your demo to Google Drive/YouTube and place the link here)
-
-Test 1: Happy Path & Priority
-Run queuectl enqueue '{"id":"job-a","command":"echo high priority", "priority": 10}'
-
-Run queuectl enqueue '{"id":"job-b","command":"echo low priority", "priority": 1}'
-
-Run queuectl worker start --count 1
-
-Observe: The worker log will show "high priority" (job-a) processing first.
-
-Test 2: Failure, Retry & DLQ
-Run queuectl config set max_retries 2
-
-Run queuectl enqueue '{"id":"job-fail","command":"exit 1"}'
-
-Observe: The worker will log "FAILED", "will retry in 2s", "FAILED" again, and finally "Moving to DLQ".
-
-Run queuectl dlq list to confirm job-fail is there.
-
-Test 3: Concurrency
-Stop all workers.
-
-Run queuectl enqueue '{"id":"job-c1","command":"ping -n 6 127.0.0.1 > nul"}'
-
-Run queuectl enqueue '{"id":"job-c2","command":"ping -n 6 127.0.0.1 > nul"}'
-
-Run queuectl worker start --count 2
-
-Observe: Both jobs will be processed simultaneously by different worker PIDs.
-
-Test 4: Graceful Stop
-Stop all workers.
-
-Run queuectl enqueue '{"id":"job-long","command":"ping -n 15 127.0.0.1 > nul"}'
-
-In Terminal 2, run queuectl worker start --count 1
-
-Wait for the log Processing job: job-long.
-
-In Terminal 1, run queuectl worker stop
-
-Observe: The worker log in Terminal 2 will say Received SIGTERM. It will finish the 14-second job and then exit gracefully.
-
-Test 5: Dashboard
-Run queuectl dashboard
+ 
 
 Open http://localhost:3000 in a browser.
 

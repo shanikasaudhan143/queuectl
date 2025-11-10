@@ -1,44 +1,36 @@
 import db from './index.js';
 
-// This is the most important query. It's a transaction, so
-// no two workers can grab the same job.
-export const getNextPendingJob = db.transaction(() => {
-  // 1. Find the next available job
-  const job = db
-    .prepare(
-      `SELECT * FROM jobs
-       WHERE state = 'pending' AND run_at <= STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
-       ORDER BY created_at ASC
-       LIMIT 1`
-    )
-    .get();
-
-  if (job) {
-    // 2. Lock the job by setting its state to 'processing'
-    const now = new Date().toISOString().replace('T', ' ').replace('Z', '');
-    db.prepare(
-      `UPDATE jobs
-       SET state = 'processing', updated_at = ?
-       WHERE id = ?`
-    ).run(now, job.id);
-
-    // 3. Return the job
-    return { ...job, state: 'processing' };
-  }
-  
-  // No job found
-  return undefined;
-});
+// A cleaner, safer way to get a SQLite-friendly UTC timestamp
+function getSQLiteTimestamp() {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
 
 export function addJob(job) {
   try {
+    const now = getSQLiteTimestamp();
+    
     db.prepare(
-      `INSERT INTO jobs (id, command, max_retries)
-       VALUES (@id, @command, @max_retries)`
+      `INSERT INTO jobs (
+         id, command, max_retries, priority, timeout_seconds, run_at, created_at, updated_at
+       )
+       VALUES (
+         @id,
+         @command,
+         @max_retries,
+         @priority,
+         COALESCE(@timeout_seconds, 300),
+         COALESCE(@run_at, @now),
+         @now,
+         @now
+       )`
     ).run({
       id: job.id,
       command: job.command,
-      max_retries: job.max_retries || 3,
+      max_retries: job.max_retries,
+      priority: job.priority,
+      timeout_seconds: job.timeout_seconds,
+      run_at: job.run_at, // run_at is now formatted in enqueue.js
+      now: now,
     });
     return true;
   } catch (err) {
@@ -47,18 +39,45 @@ export function addJob(job) {
   }
 }
 
-export function updateJobSuccess(id) {
-  const now = new Date().toISOString().replace('T', ' ').replace('Z', '');
-  // TODO: Write the SQL query to set the job's state to 'completed'
-  // and update 'updated_at'
+export const getNextPendingJob = db.transaction(() => {
+  // Use SQLite's 'now' function for the check
+  const now = getSQLiteTimestamp();
+  const job = db
+    .prepare(
+      `SELECT * FROM jobs
+       WHERE state = 'pending' AND run_at <= STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
+       ORDER BY priority DESC, created_at ASC
+       LIMIT 1`
+    )
+    .get(); // No params needed
+
+  if (job) {
+    db.prepare(
+      `UPDATE jobs
+       SET state = 'processing', updated_at = @now, started_at = @now
+       WHERE id = @id`
+    ).run({ now, id: job.id });
+    
+    return { ...job, state: 'processing', started_at: now };
+  }
+  
+  return undefined;
+});
+
+export function updateJobSuccess(id, durationSeconds) {
+  const now = getSQLiteTimestamp();
   db.prepare(
-    `UPDATE jobs SET state = 'completed', updated_at = ? WHERE id = ?`
-  ).run(now, id);
+    `UPDATE jobs
+     SET state = 'completed',
+         updated_at = @now,
+         completed_at = @now,
+         duration_seconds = @durationSeconds
+     WHERE id = @id`
+  ).run({ now, id, durationSeconds });
 }
 
 export function updateJobFailure(id, attempts, nextRunAt, error) {
-  // TODO: Write the SQL query to set the job's state back to 'pending',
-  // increment 'attempts', and set the future 'run_at' time.
+  // 'nextRunAt' is already a formatted string from the worker, so this is fine
   db.prepare(
     `UPDATE jobs
      SET state = 'pending', attempts = ?, run_at = ?, updated_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')
@@ -67,50 +86,53 @@ export function updateJobFailure(id, attempts, nextRunAt, error) {
 }
 
 export const moveJobToDLQ = db.transaction((job, error) => {
-  // 1. Insert into DLQ
   db.prepare(
-    `INSERT INTO dead_letter_queue (job_id, command, attempts, last_error)
-     VALUES (?, ?, ?, ?)`
-  ).run(job.id, job.command, job.attempts, error.toString());
+    `INSERT INTO dead_letter_queue (job_id, command, attempts, last_error, priority)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(job.id, job.command, job.attempts, error.toString(), job.priority);
   
-  // 2. Delete from main jobs table
   db.prepare(`DELETE FROM jobs WHERE id = ?`).run(job.id);
   console.log(`Moved job ${job.id} to DLQ.`);
 });
 
-export function getJobCounts() {
-  // TODO: Write a query to return the count of jobs grouped by state
-  // e.g., SELECT state, COUNT(*) as count FROM jobs GROUP BY state
-  return db.prepare(`SELECT state, COUNT(*) as count FROM jobs GROUP BY state`).all();
-}
-
-export function listJobsByState(state) {
-  // TODO: Write a query to select all jobs matching a given state
-  return db.prepare(`SELECT * FROM jobs WHERE state = ?`).all(state);
-}
-
-export function listDlqJobs() {
-  // TODO: Write a query to select all jobs from the dead_letter_queue
-  return db.prepare(`SELECT * FROM dead_letter_queue`).all();
-}
-
 export const retryDlqJob = db.transaction((jobId) => {
-  // TODO: 
-  // 1. Find the job in 'dead_letter_queue'
   const job = db.prepare(`SELECT * FROM dead_letter_queue WHERE job_id = ?`).get(jobId);
   if (!job) {
     console.error(`DLQ Job ${jobId} not found.`);
     return false;
   }
   
-  // 2. Insert it back into 'jobs' table (resetting state and attempts)
   db.prepare(
-    `INSERT INTO jobs (id, command, max_retries, state, attempts)
-     VALUES (?, ?, ?, 'pending', 0)`
-  ).run(job.job_id, job.command, job.attempts);
+    `INSERT INTO jobs (id, command, max_retries, state, attempts, priority)
+     VALUES (?, ?, ?, 'pending', 0, ?)`
+  ).run(job.job_id, job.command, job.attempts, job.priority);
 
-  // 3. Delete it from 'dead_letter_queue'
   db.prepare(`DELETE FROM dead_letter_queue WHERE job_id = ?`).run(jobId);
   console.log(`Job ${jobId} moved from DLQ back to pending queue.`);
   return true;
 });
+
+// --- No changes to the functions below ---
+export function getJobCounts() {
+  return db.prepare(`SELECT state, COUNT(*) as count FROM jobs GROUP BY state`).all();
+}
+
+export function listJobsByState(state) {
+  return db.prepare(`SELECT * FROM jobs WHERE state = ?`).all(state);
+}
+
+export function listDlqJobs() {
+  return db.prepare(`SELECT * FROM dead_letter_queue`).all();
+}
+
+export function getJobStats() {
+  return db.prepare(
+    `SELECT
+       COUNT(*) as total_completed,
+       AVG(duration_seconds) as avg_duration_sec,
+       MIN(duration_seconds) as min_duration_sec,
+       MAX(duration_seconds) as max_duration_sec
+     FROM jobs
+     WHERE state = 'completed' AND duration_seconds IS NOT NULL`
+  ).get();
+}

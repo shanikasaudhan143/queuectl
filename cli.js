@@ -11,6 +11,10 @@ import * as list from './src/commands/list.js';
 import * as dlq from './src/commands/dlq.js';
 import * as config from './src/commands/config.js';
 
+// --- NEW IMPORTS ---
+import * as stats from './src/commands/stats.js';
+import { startDashboard } from './src/dashboard.js';
+
 yargs(hideBin(process.argv))
   // 'enqueue' command
   .command(
@@ -102,6 +106,12 @@ yargs(hideBin(process.argv))
     },
     config.handler
   )
+
+  // --- NEW: stats command ---
+  .command('stats', 'Show job execution metrics', () => {}, stats.handler)
+
+  // --- NEW: dashboard command ---
+  .command('dashboard', 'Start the web dashboard', () => {}, startDashboard)
 
   .demandCommand(1, 'You must provide a valid command.')
   .help()

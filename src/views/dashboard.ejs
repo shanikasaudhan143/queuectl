@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queuectl Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f4f7f6; color: #333; margin: 0; padding: 20px; }
+    h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    h1 { text-align: center; }
+    .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card, .table-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+    .stats div { background: #fafafa; padding: 15px; border-radius: 5px; }
+    .stats div h3 { margin: 0 0 5px 0; font-size: 14px; color: #555; }
+    .stats div p { margin: 0; font-size: 24px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+    th, td { border: 1px solid #eee; padding: 10px; text-align: left; }
+    th { background: #f9f9f9; }
+    td { word-break: break-all; }
+    .state-pending { color: #007bff; }
+    .state-completed { color: #28a745; }
+    .state-dlq { color: #dc3545; }
+    .grid-full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+
+  <h1>🚀 Queuectl Dashboard</h1>
+
+  <div class="container">
+    <div class="card">
+      <h2>Job Status</h2>
+      <div class="stats">
+        <div><h3>Pending</h3><p class="state-pending"><%= status.pending || 0 %></p></div>
+        <div><h3>Processing</h3><p><%= status.processing || 0 %></p></div>
+        <div><h3>Completed</h3><p class="state-completed"><%= status.completed || 0 %></p></div>
+        <div><h3>DLQ</h3><p class="state-dlq"><%= dlqJobs.length %></p></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Execution Stats (Completed Jobs)</h2>
+      <div class="stats">
+        <div><h3>Total</h3><p><%= stats.total_completed || 0 %></p></div>
+        <div><h3>Avg. Time</h3><p><%= stats.avg_duration_sec %>s</p></div>
+        <div><h3>Min Time</h3><p><%= stats.min_duration_sec %>s</p></div>
+        <div><h3>Max Time</h3><p><%= stats.max_duration_sec %>s</p></div>
+      </div>
+    </div>
+
+    <div class="table-card grid-full">
+      <h2>Pending Jobs (<%= pendingJobs.length %>)</h2>
+      <table>
+        <tr><th>ID</th><th>Command</th><th>Priority</th><th>Run At</th></tr>
+        <% pendingJobs.forEach(function(job) { %>
+          <tr><td><%= job.id %></td><td><%= job.command %></td><td><%= job.priority %></td><td><%= job.run_at %></td></tr>
+        <% }); %>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h2>Completed Jobs (<%= completedJobs.length %>)</h2>
+      <table>
+        <tr><th>ID</th><th>Command</th><th>Priority</th><th>Duration</th></tr>
+        <% completedJobs.slice(0, 10).forEach(function(job) { %> <tr><td><%= job.id %></td><td><%= job.command %></td><td><%= job.priority %></td><td><%= job.duration_seconds.toFixed(3) %>s</td></tr>
+        <% }); %>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h2>Dead Letter Queue (<%= dlqJobs.length %>)</h2>
+      <table>
+        <tr><th>ID</th><th>Command</th><th>Priority</th><th>Error</th></tr>
+        <% dlqJobs.forEach(function(job) { %>
+          <tr><td><%= job.job_id %></td><td><%= job.command %></td><td><%= job.priority %></td><td><%= job.last_error %></td></tr>
+        <% }); %>
+      </table>
+    </div>
+  </div>
+
+</body>
+</html>
